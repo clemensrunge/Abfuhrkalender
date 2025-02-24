@@ -10,7 +10,7 @@
   - Adafruit_NeoPixel
 */
 const bool extraDebugPrint = false;
-const bool replaceYearInUrl = true;
+const bool replaceYearStringInUrl = true;
 
 #include "WifiSecret.h"
 #include "CalendarURL.h"
@@ -38,8 +38,8 @@ enum TrashType {
   COUNT
 };
 
-const uint8_t TrashTypeRed[TrashType::COUNT] = { 150, 255, 200, 1, 0 };
-const uint8_t TrashTypeGreen[TrashType::COUNT] = { 150, 122, 200, 1, 255 };
+const uint8_t TrashTypeRed[TrashType::COUNT] = { 150, 150, 200, 1, 0 };
+const uint8_t TrashTypeGreen[TrashType::COUNT] = { 150, 20, 200, 1, 255 };
 const uint8_t TrashTypeBlue[TrashType::COUNT] = { 140, 000, 000, 255, 0 };
 
 // Strings in the .ics file to trigger while parsing the file for dates.
@@ -56,6 +56,19 @@ struct Event {
 const int maxNumberOfEvents = 100;
 Event events[maxNumberOfEvents];
 int numberOfEvents = 0;
+
+enum TodaysEventDay {
+  TODAY,
+  TOMORROW
+};
+
+struct TodaysEvent {
+  TrashType type;
+  TodaysEventDay day;
+};
+
+TodaysEvent todaysEvents[TrashType::COUNT];
+int numberOfTodaysEvents = 0;
 
 void setup();
 void loop();
@@ -203,7 +216,7 @@ time_t myTimegm(tm* t) {
 }
 
 bool isEventOnDate(Event& event, tm* timeinfo) {
-  return event.year + 100 == timeinfo->tm_year && event.month == timeinfo->tm_mon && event.day == timeinfo->tm_mday;
+  return event.year + 100 == timeinfo->tm_year && event.month == timeinfo->tm_mon + 1 && event.day == timeinfo->tm_mday;
 }
 
 bool updateLeds(bool lastEventUpdateSuccessful) {
@@ -234,26 +247,49 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
   bool nextDay = false;
   bool thisDay = false;
 
+  numberOfTodaysEvents = 0;
+
   for (int i = 0; i < numberOfEvents; i++) {
     thisDay = isEventOnDate(events[i], &timeinfo);
     nextDay = isEventOnDate(events[i], timeinfoNextDay);
 
     if (thisDay || nextDay) {
+      
+      todaysEvents[numberOfTodaysEvents].type = events[i].type;
+      if(thisDay) {
+        todaysEvents[numberOfTodaysEvents].day = TodaysEventDay::TODAY;
+      }
+
+      if(nextDay) {
+        todaysEvents[numberOfTodaysEvents].day = TodaysEventDay::TOMORROW;
+      }
+      numberOfTodaysEvents++;
+      
       const int index = static_cast<int>(events[i].type);
       r = TrashTypeRed[index];
       g = TrashTypeGreen[index];
       b = TrashTypeBlue[index];
-      break;
+      Serial.println(TrashTypeStrings[static_cast<int>(events[i].type)]);
     }
   }
 
-  if (thisDay || nextDay) {
+  if (numberOfTodaysEvents == 1) {
     for (int p = 0; p < numOfNeoPixels; p++) {
       if (p != numOfNeoPixels / 2 && thisDay) {
         pixels.setPixelColor(p, pixels.Color(0, 0, 0));
         continue;
       }
       pixels.setPixelColor(p, pixels.Color(r, g, b));
+    }
+  } else if (1 < numberOfTodaysEvents) {
+    pixels.setPixelColor(0, pixels.Color(0, 0, 0));
+    for (int p = 1; p < numOfNeoPixels; p++) {
+        const int index = static_cast<int>(todaysEvents[p-1].type);
+        r = TrashTypeRed[index];
+        g = TrashTypeGreen[index];
+        b = TrashTypeBlue[index];
+        pixels.setPixelColor(p, pixels.Color(r, g, b));
+        Serial.println(TrashTypeStrings[static_cast<int>(todaysEvents[p-1].type)]);
     }
   } else {
     pixels.clear();
@@ -353,7 +389,7 @@ bool getIcs() {
   Serial.print("[HTTPS] begin get:");
   char url[150];
   strcpy(url, icsURL);
-  if(replaceYearInUrl){
+  if(replaceYearStringInUrl){
     replaceYearInUrl(url);
   }
   Serial.println(url);
