@@ -9,7 +9,7 @@
   External librarie used:
   - Adafruit_NeoPixel
 */
-const bool extraDebugPrint = false;
+const bool extraDebugPrint = true;
 const bool replaceYearStringInUrl = true;
 
 #include "WifiSecret.h"
@@ -181,7 +181,7 @@ void stopWifi() {
 
 void printTimeInfo(tm* timeinfo) {
   Serial.print("Year: ");
-  Serial.print(timeinfo->tm_year);
+  Serial.print(timeinfo->tm_year + 1900);
   Serial.print(" Month: ");
   Serial.print(timeinfo->tm_mon);
   Serial.print(" Day: ");
@@ -254,17 +254,17 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
     nextDay = isEventOnDate(events[i], timeinfoNextDay);
 
     if (thisDay || nextDay) {
-      
+
       todaysEvents[numberOfTodaysEvents].type = events[i].type;
-      if(thisDay) {
+      if (thisDay) {
         todaysEvents[numberOfTodaysEvents].day = TodaysEventDay::TODAY;
       }
 
-      if(nextDay) {
+      if (nextDay) {
         todaysEvents[numberOfTodaysEvents].day = TodaysEventDay::TOMORROW;
       }
       numberOfTodaysEvents++;
-      
+
       const int index = static_cast<int>(events[i].type);
       r = TrashTypeRed[index];
       g = TrashTypeGreen[index];
@@ -284,12 +284,12 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
   } else if (1 < numberOfTodaysEvents) {
     pixels.setPixelColor(0, pixels.Color(0, 0, 0));
     for (int p = 1; p < numOfNeoPixels; p++) {
-        const int index = static_cast<int>(todaysEvents[p-1].type);
-        r = TrashTypeRed[index];
-        g = TrashTypeGreen[index];
-        b = TrashTypeBlue[index];
-        pixels.setPixelColor(p, pixels.Color(r, g, b));
-        Serial.println(TrashTypeStrings[static_cast<int>(todaysEvents[p-1].type)]);
+      const int index = static_cast<int>(todaysEvents[p - 1].type);
+      r = TrashTypeRed[index];
+      g = TrashTypeGreen[index];
+      b = TrashTypeBlue[index];
+      pixels.setPixelColor(p, pixels.Color(r, g, b));
+      Serial.println(TrashTypeStrings[static_cast<int>(todaysEvents[p - 1].type)]);
     }
   } else {
     pixels.clear();
@@ -308,6 +308,7 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
 }
 
 void parseIcsLine(const String& line) {
+   Serial.println(line);
   static bool trigger = false;
   if (maxNumberOfEvents <= numberOfEvents) {
     Serial.println("Max number of events reached.");
@@ -389,7 +390,7 @@ bool getIcs() {
   Serial.print("[HTTPS] begin get:");
   char url[150];
   strcpy(url, icsURL);
-  if(replaceYearStringInUrl){
+  if (replaceYearStringInUrl) {
     replaceYearInUrl(url);
   }
   Serial.println(url);
@@ -415,10 +416,12 @@ bool getIcs() {
 
   size_t totalNoneControlCharacters = 0;
   numberOfEvents = 0;
-  String line;
+  String line, oldLine;
+  bool onlyDigitsInLine = false;
 
   do {
     line = client->readStringUntil('\n');
+    //Serial.print(line);
     if (iscntrl(line[line.length() - 1])) {
       line.remove(line.length() - 1, 1);
     }
@@ -427,19 +430,35 @@ bool getIcs() {
     // Getting the result directly through client->read[..]() produces
     // whole unusable lines only containing arbitrary numbers.
     // Presumably, those are leftovers of the ethernet frame reassembly.
-    bool onlyDigitsInLine = true;
+    
+    if(onlyDigitsInLine) { 
+      oldLine += line;
+    }
+    const bool skipOldLine = onlyDigitsInLine;
+
+    onlyDigitsInLine = true;
     for (const char c : line) {
       if (!isdigit(c)) {
         onlyDigitsInLine = false;
         break;
       }
     }
-
-    if (!onlyDigitsInLine) {
-      if (extraDebugPrint) {
-        Serial.println(line);
+    /*if (extraDebugPrint) {
+      if (onlyDigitsInLine) {
+        Serial.print("only digits: ");
       }
-      parseIcsLine(line);
+      Serial.println(line);
+    }*/
+    if (!onlyDigitsInLine) {
+      if(0 != oldLine.length()) {
+        parseIcsLine(oldLine);
+      }
+
+      if(!skipOldLine) {
+        oldLine = line;
+      } else {
+        oldLine.clear();
+      }
     }
   } while (0 != line.length());
   https.end();
