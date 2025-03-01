@@ -8,7 +8,7 @@
   
   External librarie used:
   - Adafruit_NeoPixel
-*/
+ */
 const bool extraDebugPrint = true;
 const bool replaceYearStringInUrl = true;
 
@@ -396,9 +396,8 @@ bool getIcs() {
   Serial.println(url);
 
   HTTPClient https;
-  if (!https.begin(*client, icsURL)) {
+  if (!https.begin(*client, url)) {
     Serial.printf("[HTTPS] Unable to connect\n");
-    https.end();
     return false;
   }
 
@@ -419,56 +418,30 @@ bool getIcs() {
   String line, oldLine;
   bool onlyDigitsInLine = false;
 
-  do {
-    line = client->readStringUntil('\n');
-    //Serial.print(line);
-    if (iscntrl(line[line.length() - 1])) {
-      line.remove(line.length() - 1, 1);
-    }
+  while (client->connected() && (line = client->readStringUntil('\n')).length() > 0) {
+    line.trim();
     totalNoneControlCharacters += line.length();
 
-    // Getting the result directly through client->read[..]() produces
-    // whole unusable lines only containing arbitrary numbers.
-    // Presumably, those are leftovers of the ethernet frame reassembly.
-    
-    if(onlyDigitsInLine) { 
+    if (onlyDigitsInLine) {
       oldLine += line;
     }
-    const bool skipOldLine = onlyDigitsInLine;
+    bool skipOldLine = onlyDigitsInLine;
 
-    onlyDigitsInLine = true;
-    for (const char c : line) {
-      if (!isdigit(c)) {
-        onlyDigitsInLine = false;
-        break;
-      }
-    }
-    /*if (extraDebugPrint) {
-      if (onlyDigitsInLine) {
-        Serial.print("only digits: ");
-      }
-      Serial.println(line);
-    }*/
+    onlyDigitsInLine = std::all_of(line.begin(), line.end(), ::isdigit);
+
     if (!onlyDigitsInLine) {
-      if(0 != oldLine.length()) {
+      if (!oldLine.isEmpty()) {
         parseIcsLine(oldLine);
       }
 
-      if(!skipOldLine) {
-        oldLine = line;
-      } else {
-        oldLine.clear();
-      }
+      oldLine = skipOldLine ? "" : line;
     }
-  } while (0 != line.length());
+  }
   https.end();
 
-  Serial.print("Total none control characters gotten: ");
-  Serial.println(totalNoneControlCharacters);
-
-  Serial.print("Total events parsed: ");
-  Serial.println(numberOfEvents);
-  if (0 == numberOfEvents) {
+  Serial.printf("Total non-control characters gotten: %zu\n", totalNoneControlCharacters);
+  Serial.printf("Total events parsed: %d\n", numberOfEvents);
+  if (numberOfEvents == 0) {
     Serial.println("Failure, expected more than zero events.");
     return false;
   }
