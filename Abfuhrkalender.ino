@@ -9,7 +9,7 @@
   External librarie used:
   - Adafruit_NeoPixel
  */
-const bool extraDebugPrint = true;
+const bool extraDebugPrint = false;
 const bool replaceYearStringInUrl = true;
 
 #include "WifiSecret.h"
@@ -183,7 +183,7 @@ void printTimeInfo(tm* timeinfo) {
   Serial.print("Year: ");
   Serial.print(timeinfo->tm_year + 1900);
   Serial.print(" Month: ");
-  Serial.print(timeinfo->tm_mon);
+  Serial.print(timeinfo->tm_mon + 1);
   Serial.print(" Day: ");
   Serial.println(timeinfo->tm_mday);
 
@@ -308,7 +308,6 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
 }
 
 void parseIcsLine(const String& line) {
-   Serial.println(line);
   static bool trigger = false;
   if (maxNumberOfEvents <= numberOfEvents) {
     Serial.println("Max number of events reached.");
@@ -418,9 +417,13 @@ bool getIcs() {
   String line, oldLine;
   bool onlyDigitsInLine = false;
 
-  while (client->connected() && (line = client->readStringUntil('\n')).length() > 0) {
+  while((line = client->readStringUntil('\n')).length() > 0) {
+    if(extraDebugPrint) {
+      Serial.print(line);
+    }
     line.trim();
     totalNoneControlCharacters += line.length();
+
 
     if (onlyDigitsInLine) {
       oldLine += line;
