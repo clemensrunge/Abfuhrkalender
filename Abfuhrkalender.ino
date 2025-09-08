@@ -9,7 +9,7 @@
   External librarie used:
   - Adafruit_NeoPixel
  */
-const bool extraDebugPrint = false;
+const bool extraDebugPrint = true;
 const bool replaceYearStringInUrl = true;
 
 #include "WifiSecret.h"
@@ -20,6 +20,7 @@ const bool replaceYearStringInUrl = true;
 #include <ESP8266HTTPClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <Adafruit_NeoPixel.h>
+struct tm; // As required by POSIX.1-2008, declare tm as incomplete type. The actual definition is in time.h.
 
 const int neoPixelPin = 5;
 const int numOfNeoPixels = 3;
@@ -216,28 +217,44 @@ time_t myTimegm(tm* t) {
 }
 
 bool isEventOnDate(Event& event, tm* timeinfo) {
+  if(extraDebugPrint) {
+    Serial.println(event.type);
+    Serial.println(event.year + 100);
+    Serial.println(timeinfo->tm_year);
+
+    Serial.println(event.month);
+    Serial.println(timeinfo->tm_mon + 1);
+
+    Serial.println(event.day);
+    Serial.println(timeinfo->tm_mday);
+  }
+
   return event.year + 100 == timeinfo->tm_year && event.month == timeinfo->tm_mon + 1 && event.day == timeinfo->tm_mday;
 }
 
 bool updateLeds(bool lastEventUpdateSuccessful) {
   Serial.println("This Day:");
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
+  tm localTime;
+  if (!getLocalTime(&localTime)) {
     Serial.println("Failed to obtain time");
     return false;
   }
-  printTimeInfo(&timeinfo);
 
-  static int lastMonth = timeinfo.tm_mon;
-  static int lastDay = timeinfo.tm_mday;
+  const int addDebugDaysToToday = 0;
+  time_t hackTimestampThisDay = myTimegm(&localTime) + addDebugDaysToToday * 3600 * 24;
+  tm* timeinfo = localtime(&hackTimestampThisDay);
+  printTimeInfo(timeinfo);
+
+  static int lastMonth = timeinfo->tm_mon;
+  static int lastDay = timeinfo->tm_mday;
   static bool firstRun = true;
 
-  if (!firstRun && lastDay == timeinfo.tm_mday) {
+  if (!firstRun && lastDay == timeinfo->tm_mday) {
     return false;
   }
 
   Serial.println("Next Day:");
-  time_t timestampNextDay = myTimegm(&timeinfo) + 3600 * 24;
+  time_t timestampNextDay = myTimegm(timeinfo) + 3600 * 24;
   struct tm* timeinfoNextDay = localtime(&timestampNextDay);
   printTimeInfo(timeinfoNextDay);
 
@@ -250,7 +267,11 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
   numberOfTodaysEvents = 0;
 
   for (int i = 0; i < numberOfEvents; i++) {
-    thisDay = isEventOnDate(events[i], &timeinfo);
+    if(extraDebugPrint) {
+      Serial.print("i: ");
+      Serial.println(i);
+    }
+    thisDay = isEventOnDate(events[i], timeinfo);
     nextDay = isEventOnDate(events[i], timeinfoNextDay);
 
     if (thisDay || nextDay) {
@@ -301,9 +322,9 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
 
   pixels.show();
 
-  bool newMonth = lastMonth != timeinfo.tm_mon;
-  lastMonth = timeinfo.tm_mon;
-  lastDay = timeinfo.tm_mday;
+  bool newMonth = lastMonth != timeinfo->tm_mon;
+  lastMonth = timeinfo->tm_mon;
+  lastDay = timeinfo->tm_mday;
   return newMonth;
 }
 
@@ -385,6 +406,7 @@ bool getIcs() {
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
   client->setInsecure();
   client->setBufferSizes(65536, 2048);
+  client->setTimeout(3000);
 
   Serial.print("[HTTPS] begin get:");
   char url[150];
@@ -412,18 +434,33 @@ bool getIcs() {
     return false;
   }
 
-  size_t totalNoneControlCharacters = 0;
+  size_t totalCharacters = 0;
   numberOfEvents = 0;
   String line, oldLine;
   bool onlyDigitsInLine = false;
+  unsigned int lineNumber = 0;
+  int zeroLines = 0;
 
-  while((line = client->readStringUntil('\n')).length() > 0) {
-    if(extraDebugPrint) {
-      Serial.print(line);
+  while(line = client->readStringUntil('\n')) {
+    if(line.length() == 0) {
+      zeroLines++;
+      Serial.println("zero line");
+      if( 2 <= zeroLines) {
+        Serial.println("zero line break");
+          break;
+      } else {
+        continue;
+      }
     }
+    zeroLines = 0;
+    lineNumber++;
+    if(extraDebugPrint) {
+      Serial.print(lineNumber);
+      Serial.print(": ");
+      Serial.println(line);
+    }
+    totalCharacters += line.length();
     line.trim();
-    totalNoneControlCharacters += line.length();
-
 
     if (onlyDigitsInLine) {
       oldLine += line;
@@ -442,7 +479,7 @@ bool getIcs() {
   }
   https.end();
 
-  Serial.printf("Total non-control characters gotten: %zu\n", totalNoneControlCharacters);
+  Serial.printf("Total non-control characters gotten: %zu\n", totalCharacters);
   Serial.printf("Total events parsed: %d\n", numberOfEvents);
   if (numberOfEvents == 0) {
     Serial.println("Failure, expected more than zero events.");
