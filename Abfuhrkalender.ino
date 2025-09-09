@@ -241,8 +241,8 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
   }
 
   const int addDebugDaysToToday = 0;
-  time_t hackTimestampThisDay = myTimegm(&localTime) + addDebugDaysToToday * 3600 * 24;
-  tm* timeinfo = localtime(&hackTimestampThisDay);
+  //time_t hackTimestampThisDay = myTimegm(&localTime) + addDebugDaysToToday * 3600 * 24;
+  tm* timeinfo = &localTime; //localtime(&hackTimestampThisDay);
   printTimeInfo(timeinfo);
 
   static int lastMonth = timeinfo->tm_mon;
@@ -255,7 +255,7 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
 
   Serial.println("Next Day:");
   time_t timestampNextDay = myTimegm(timeinfo) + 3600 * 24;
-  struct tm* timeinfoNextDay = localtime(&timestampNextDay);
+  tm* timeinfoNextDay = localtime(&timestampNextDay);
   printTimeInfo(timeinfoNextDay);
 
   uint8_t r = 0;
