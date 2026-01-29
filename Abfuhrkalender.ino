@@ -379,7 +379,7 @@ void parseIcsLine(const String& line) {
 void replaceYearInUrl(char* url) {
   char* year = strstr(url, "yyyy");
   if (!year) {
-    Serial.println("Failed to finde year placeholder in url");
+    Serial.println("Failed to find year placeholder in url");
     return;
   }
 
