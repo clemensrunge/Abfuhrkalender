@@ -377,24 +377,26 @@ void parseIcsLine(const String& line) {
 }
 
 void replaceYearInUrl(char* url) {
-  char* year = strstr(url, ".ics");
+  char* year = strstr(url, "yyyy");
   if (!year) {
+    Serial.println("Failed to finde year placeholder in url");
     return;
   }
-  year = year - 2;
 
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
     Serial.println("Failed to obtain time");
     return;
   }
-  String yearString = String(timeinfo.tm_year - 1900);
-  if (yearString.length() != 2) {
+  String yearString = String(timeinfo.tm_year + 1900);
+  if (yearString.length() != 4) {
     return;
   }
 
   *year = yearString[0];
   *(year + 1) = yearString[1];
+  *(year + 2) = yearString[2];
+  *(year + 3) = yearString[3];
 }
 
 bool getIcs() {
