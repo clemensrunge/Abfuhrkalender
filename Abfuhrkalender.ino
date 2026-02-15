@@ -20,7 +20,8 @@ const bool replaceYearStringInUrl = true;
 #include <ESP8266HTTPClient.h>
 #include <WiFiClientSecureBearSSL.h>
 #include <Adafruit_NeoPixel.h>
-struct tm; // As required by POSIX.1-2008, declare tm as incomplete type. The actual definition is in time.h.
+
+struct tm;  // As required by POSIX.1-2008, declare tm as incomplete type. The actual definition is in time.h.
 
 const int neoPixelPin = 5;
 const int numOfNeoPixels = 3;
@@ -115,7 +116,14 @@ void loop() {
     Serial.println("[updateIcs] new month");
     success = updateIcs();
   } else {
+
     delay(59000);
+    pixels.setPixelColor(0, pixels.Color(0, 10, 0));
+    pixels.show();
+    delay(1000);
+    pixels.clear();
+    pixels.show();
+
     if (!success) {
       Serial.println("[updateIcs] retry");
       success = updateIcs();
@@ -217,7 +225,7 @@ time_t myTimegm(tm* t) {
 }
 
 bool isEventOnDate(Event& event, tm* timeinfo) {
-  if(extraDebugPrint) {
+  if (extraDebugPrint) {
     Serial.println(event.type);
     Serial.println(event.year + 100);
     Serial.println(timeinfo->tm_year);
@@ -242,7 +250,7 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
 
   const int addDebugDaysToToday = 0;
   //time_t hackTimestampThisDay = myTimegm(&localTime) + addDebugDaysToToday * 3600 * 24;
-  tm* timeinfo = &localTime; //localtime(&hackTimestampThisDay);
+  tm* timeinfo = &localTime;  //localtime(&hackTimestampThisDay);
   printTimeInfo(timeinfo);
 
   static int lastMonth = timeinfo->tm_mon;
@@ -267,7 +275,7 @@ bool updateLeds(bool lastEventUpdateSuccessful) {
   numberOfTodaysEvents = 0;
 
   for (int i = 0; i < numberOfEvents; i++) {
-    if(extraDebugPrint) {
+    if (extraDebugPrint) {
       Serial.print("i: ");
       Serial.println(i);
     }
@@ -407,7 +415,11 @@ bool getIcs() {
   Serial.println("[GET-ICS]");
   std::unique_ptr<BearSSL::WiFiClientSecure> client(new BearSSL::WiFiClientSecure);
   client->setInsecure();
-  client->setBufferSizes(65536, 2048);
+  Serial.print("[Free Heap] ");
+  Serial.println(ESP.getFreeHeap());
+  Serial.println("[Set HTTPS Receive Buffer Size] 40000");
+
+  client->setBufferSizes(40000, 2048);
   client->setTimeout(3000);
 
   Serial.print("[HTTPS] begin get:");
@@ -424,9 +436,14 @@ bool getIcs() {
     return false;
   }
 
+  Serial.print("[Free Heap] ");
+  Serial.println(ESP.getFreeHeap());
+  yield();
   Serial.print("[HTTPS] GET...\n");
   int httpCode = https.GET();  // start connection and send HTTP header
-  if (httpCode <= 0) {         // httpCode will be negative on error
+  Serial.print("[Free Heap] ");
+  Serial.println(ESP.getFreeHeap());
+  if (httpCode <= 0) {  // httpCode will be negative on error
     Serial.printf("[HTTPS] GET... failed, error: %s\n", https.errorToString(httpCode).c_str());
     return false;
   }
@@ -443,20 +460,21 @@ bool getIcs() {
   unsigned int lineNumber = 0;
   int zeroLines = 0;
 
-  while(line = client->readStringUntil('\n')) {
-    if(line.length() == 0) {
+  while (line = client->readStringUntil('\n')) {
+    yield();
+    if (line.length() == 0) {
       zeroLines++;
       Serial.println("zero line");
-      if( 2 <= zeroLines) {
+      if (2 <= zeroLines) {
         Serial.println("zero line break");
-          break;
+        break;
       } else {
         continue;
       }
     }
     zeroLines = 0;
     lineNumber++;
-    if(extraDebugPrint) {
+    if (extraDebugPrint) {
       Serial.print(lineNumber);
       Serial.print(": ");
       Serial.println(line);
