@@ -171,10 +171,19 @@ bool handleFailure() {
 }
 
 void startWifi() {
+  // The WDT is fed by delay(), so a connect loop without a timeout can hang forever.
+  const unsigned long connectTimeoutMs = 60000;
   WiFi.mode(WIFI_STA);
   WiFi.begin(SSID, PSWD);
   Serial.printf("[Wifi] Connecting to %s\n", SSID);
+  unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED) {
+    if (connectTimeoutMs < millis() - start) {
+      Serial.println();
+      Serial.println("[Wifi] Connect timeout, restarting");
+      delay(100);  // Let the serial buffer drain.
+      ESP.restart();
+    }
     delay(500);
     Serial.print(".");
   }
